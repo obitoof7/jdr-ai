@@ -64,6 +64,7 @@ class Message(db.Model):
     role = db.Column(db.String(20), nullable=False)
     visibilite = db.Column(db.String(20), default="public")
     destinataire = db.Column(db.String(80), nullable=True)
+    requete_id = db.Column(db.String(40), nullable=True)
 
 
 @login_manager.user_loader
@@ -75,7 +76,6 @@ with app.app_context():
     db.create_all()
 
 
-# --- Authentification ---
 @app.route("/inscription", methods=["GET", "POST"])
 def inscription():
     if request.method == "POST":
@@ -119,7 +119,6 @@ def deconnexion():
     return redirect(url_for("connexion"))
 
 
-# --- Accueil (choix créer / rejoindre une partie) ---
 @app.route("/")
 @login_required
 def accueil():
@@ -159,7 +158,6 @@ def rejoindre_partie():
     return redirect(url_for("partie", code=code))
 
 
-# --- La partie / le jeu ---
 @app.route("/partie/<code>")
 @login_required
 def partie(code):
@@ -205,7 +203,6 @@ def relancer_partie(code):
     return jsonify({"ok": True})
 
 
-# --- Messages et action de jeu ---
 @app.route("/partie/<code>/messages")
 @login_required
 def messages(code):
@@ -236,13 +233,23 @@ def jouer(code):
         return jsonify({"erreur": "Cette partie est terminée."}), 400
 
     action_joueur = request.json.get("action", "")
+    requete_id = request.json.get("requete_id")
+
+    if requete_id:
+        deja_traite = Message.query.filter_by(
+            party_id=partie.id,
+            requete_id=requete_id
+        ).first()
+        if deja_traite:
+            return jsonify({"ok": True, "deja_traite": True})
 
     msg_joueur = Message(
         party_id=partie.id,
         auteur=current_user.username,
         contenu=action_joueur,
         role="user",
-        visibilite="public"
+        visibilite="public",
+        requete_id=requete_id
     )
     db.session.add(msg_joueur)
     db.session.commit()

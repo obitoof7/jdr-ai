@@ -150,11 +150,13 @@
             bouton.disabled = true;
             afficherStatut("Envoi en cours... (le serveur peut mettre jusqu'à 50s à se réveiller)", true);
 
+            const idUnique = crypto.randomUUID();
+
             try {
                 const reponse = await fetch(`/partie/${codePartie}/jouer`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: texte })
+                    body: JSON.stringify({ action: texte, requete_id: idUnique })
                 });
                 if (!reponse.ok) throw new Error("Erreur serveur");
                 afficherStatut("", false);
