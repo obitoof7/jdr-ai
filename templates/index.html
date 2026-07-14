@@ -28,6 +28,8 @@
         #chat { max-width: 700px; margin: auto; }
         .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
         .joueur { background: #2a4d69; text-align: right; }
+        .autre-joueur { background: #4a2a69; }
+        .autre-joueur .nom-auteur { color: #c9a; font-size: 12px; display: block; margin-bottom: 4px; }
         .mj { background: #333; }
         #zone-saisie { display: flex; max-width: 700px; margin: 20px auto; }
         #action { flex: 1; padding: 10px; font-size: 16px; }
@@ -46,35 +48,66 @@
     </div>
 
     <script>
+        const monPseudo = "{{ pseudo }}";
+        let dernierId = 0;
+
         async function envoyer() {
             const input = document.getElementById("action");
             const texte = input.value.trim();
             if (!texte) return;
 
-            ajouterMessage(texte, "joueur");
             input.value = "";
+            input.disabled = true;
 
-            const reponse = await fetch("/jouer", {
+            await fetch("/jouer", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: texte })
             });
-            const data = await reponse.json();
-            ajouterMessage(data.reponse, "mj");
+
+            input.disabled = false;
+            input.focus();
+            chargerMessages();
         }
 
-        function ajouterMessage(texte, type) {
+        function ajouterMessage(msg) {
             const chat = document.getElementById("chat");
             const div = document.createElement("div");
-            div.className = "message " + type;
-            div.textContent = texte;
+
+            if (msg.role === "assistant") {
+                div.className = "message mj";
+                div.textContent = msg.contenu;
+            } else if (msg.auteur === monPseudo) {
+                div.className = "message joueur";
+                div.textContent = msg.contenu;
+            } else {
+                div.className = "message autre-joueur";
+                const nom = document.createElement("span");
+                nom.className = "nom-auteur";
+                nom.textContent = msg.auteur;
+                div.appendChild(nom);
+                div.appendChild(document.createTextNode(msg.contenu));
+            }
+
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function chargerMessages() {
+            const reponse = await fetch(`/messages?apres=${dernierId}`);
+            const nouveaux = await reponse.json();
+            nouveaux.forEach(msg => {
+                ajouterMessage(msg);
+                dernierId = msg.id;
+            });
         }
 
         document.getElementById("action").addEventListener("keypress", function(e) {
             if (e.key === "Enter") envoyer();
         });
+
+        chargerMessages();
+        setInterval(chargerMessages, 2000);
     </script>
 </body>
 </html>

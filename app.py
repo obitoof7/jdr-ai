@@ -91,16 +91,34 @@ def deconnexion():
 
 
 PROMPT_SYSTEME = """Tu es le maître du jeu d'un jeu de rôle textuel se déroulant dans l'univers de Bleach.
-Tu incarnes le monde, les PNJ (Shinigami, Hollows, humains, etc.) et tu racontes les conséquences des actions du joueur.
+Tu incarnes le monde, les PNJ (Shinigami, Hollows, humains, etc.) et tu racontes les conséquences des actions des joueurs.
 Reste cohérent avec l'univers Bleach (Soul Society, Hollows, Zanpakuto, Hueco Mundo, etc.).
-Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse.
-Ne joue jamais à la place du joueur : décris ce qui l'entoure et laisse-le décider de ses actions."""
+Plusieurs joueurs participent à la même aventure : chaque message des joueurs commence par leur pseudo.
+Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en tenant compte des actions de TOUS les joueurs.
+Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions."""
 
 
 @app.route("/")
 @login_required
 def accueil():
     return render_template("index.html", pseudo=current_user.username)
+
+
+@app.route("/messages")
+@login_required
+def messages():
+    apres_id = request.args.get("apres", 0, type=int)
+    messages_db = Message.query.filter(Message.id > apres_id).order_by(Message.id).all()
+    resultat = [
+        {
+            "id": m.id,
+            "auteur": m.auteur,
+            "contenu": m.contenu,
+            "role": m.role
+        }
+        for m in messages_db
+    ]
+    return jsonify(resultat)
 
 
 @app.route("/jouer", methods=["POST"])
@@ -138,7 +156,7 @@ def jouer():
     db.session.add(msg_ia)
     db.session.commit()
 
-    return jsonify({"reponse": texte_reponse})
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
