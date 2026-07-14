@@ -57,6 +57,9 @@
             cursor: pointer;
             font-size: 13px;
         }
+        #statut-connexion {
+            display: none;
+        }
         #chat { max-width: 700px; margin: auto; }
         .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
         .joueur { background: #2a4d69; text-align: right; }
@@ -102,6 +105,7 @@
     <div id="bandeau-terminee">Cette partie est terminée. {% if est_hote %}Tu peux la relancer avec le bouton ci-dessus.{% endif %}</div>
     {% endif %}
 
+    <div id="statut-connexion"></div>
     <div id="chat"></div>
     <div id="zone-saisie">
         <input type="text" id="action" placeholder="Que fais-tu ?" {% if not active %}disabled{% endif %}>
@@ -113,6 +117,24 @@
         const codePartie = "{{ code }}";
         let dernierId = 0;
         let envoiEnCours = false;
+
+        function afficherStatut(texte, actif) {
+            const statut = document.getElementById("statut-connexion");
+            if (actif) {
+                statut.style.display = "block";
+                statut.style.background = "#542";
+                statut.style.color = "#fc8";
+                statut.style.padding = "8px";
+                statut.style.borderRadius = "6px";
+                statut.style.textAlign = "center";
+                statut.style.fontSize = "13px";
+                statut.style.maxWidth = "700px";
+                statut.style.margin = "0 auto 10px auto";
+                statut.textContent = texte;
+            } else {
+                statut.style.display = "none";
+            }
+        }
 
         async function envoyer() {
             if (envoiEnCours) return;
@@ -126,13 +148,19 @@
             input.value = "";
             input.disabled = true;
             bouton.disabled = true;
+            afficherStatut("Envoi en cours... (le serveur peut mettre jusqu'à 50s à se réveiller)", true);
 
             try {
-                await fetch(`/partie/${codePartie}/jouer`, {
+                const reponse = await fetch(`/partie/${codePartie}/jouer`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: texte })
                 });
+                if (!reponse.ok) throw new Error("Erreur serveur");
+                afficherStatut("", false);
+            } catch (err) {
+                afficherStatut("Connexion perdue, nouvelle tentative...", true);
+                input.value = texte;
             } finally {
                 input.disabled = false;
                 bouton.disabled = false;
@@ -166,12 +194,18 @@
         }
 
         async function chargerMessages() {
-            const reponse = await fetch(`/partie/${codePartie}/messages?apres=${dernierId}`);
-            const nouveaux = await reponse.json();
-            nouveaux.forEach(msg => {
-                ajouterMessage(msg);
-                dernierId = msg.id;
-            });
+            try {
+                const reponse = await fetch(`/partie/${codePartie}/messages?apres=${dernierId}`);
+                if (!reponse.ok) throw new Error("Erreur serveur");
+                const nouveaux = await reponse.json();
+                nouveaux.forEach(msg => {
+                    ajouterMessage(msg);
+                    dernierId = msg.id;
+                });
+                afficherStatut("", false);
+            } catch (err) {
+                afficherStatut("Connexion au serveur perdue, nouvelle tentative...", true);
+            }
         }
 
         async function terminerPartie() {
@@ -191,7 +225,7 @@
         });
 
         chargerMessages();
-        setInterval(chargerMessages, 2000);
+        setInterval(chargerMessages, 3000);
     </script>
 </body>
 </html>
