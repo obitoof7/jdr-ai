@@ -34,6 +34,7 @@
         #zone-saisie { display: flex; max-width: 700px; margin: 20px auto; }
         #action { flex: 1; padding: 10px; font-size: 16px; }
         button { padding: 10px 20px; font-size: 16px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -44,30 +45,40 @@
     <div id="chat"></div>
     <div id="zone-saisie">
         <input type="text" id="action" placeholder="Que fais-tu ?">
-        <button onclick="envoyer()">Envoyer</button>
+        <button id="btn-envoyer" onclick="envoyer()">Envoyer</button>
     </div>
 
     <script>
         const monPseudo = "{{ pseudo }}";
         let dernierId = 0;
+        let envoiEnCours = false;
 
         async function envoyer() {
+            if (envoiEnCours) return;
+
             const input = document.getElementById("action");
+            const bouton = document.getElementById("btn-envoyer");
             const texte = input.value.trim();
             if (!texte) return;
 
+            envoiEnCours = true;
             input.value = "";
             input.disabled = true;
+            bouton.disabled = true;
 
-            await fetch("/jouer", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: texte })
-            });
-
-            input.disabled = false;
-            input.focus();
-            chargerMessages();
+            try {
+                await fetch("/jouer", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: texte })
+                });
+            } finally {
+                input.disabled = false;
+                bouton.disabled = false;
+                input.focus();
+                envoiEnCours = false;
+                chargerMessages();
+            }
         }
 
         function ajouterMessage(msg) {
