@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion</title>
+    <style>
+        body { background: #111; color: #eee; font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        form { background: #222; padding: 30px; border-radius: 10px; width: 300px; }
+        input { width: 100%; padding: 8px; margin: 8px 0; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; margin-top: 10px; }
+        a { color: #6cf; }
+    </style>
+</head>
+<body>
+    <form method="POST">
+        <h2>Connexion</h2>
+        <input type="text" name="username" placeholder="Pseudo" required>
+        <input type="password" name="password" placeholder="Mot de passe" required>
+        <button type="submit">Se connecter</button>
+        <p>Pas de compte ? <a href="/inscription">S'inscrire</a></p>
+    </form>
+</body>
+</html>
