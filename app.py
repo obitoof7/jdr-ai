@@ -11,14 +11,18 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-moi-plus-tard"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///jdr.db"
+
+database_url = os.getenv("DATABASE_URL", "sqlite:///jdr.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+
 db = SQLAlchemy(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "connexion"
 
 
-# --- Tables de la base de données ---
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -43,7 +47,6 @@ with app.app_context():
     db.create_all()
 
 
-# --- Authentification ---
 @app.route("/inscription", methods=["GET", "POST"])
 def inscription():
     if request.method == "POST":
@@ -87,7 +90,6 @@ def deconnexion():
     return redirect(url_for("connexion"))
 
 
-# --- Le jeu ---
 PROMPT_SYSTEME = """Tu es le maître du jeu d'un jeu de rôle textuel se déroulant dans l'univers de Bleach.
 Tu incarnes le monde, les PNJ (Shinigami, Hollows, humains, etc.) et tu racontes les conséquences des actions du joueur.
 Reste cohérent avec l'univers Bleach (Soul Society, Hollows, Zanpakuto, Hueco Mundo, etc.).
