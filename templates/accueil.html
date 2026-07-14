@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>JDR IA - Accueil</title>
+    <style>
+        body { background: #111; color: #eee; font-family: Arial; padding: 20px; }
+        #entete {
+            max-width: 500px;
+            margin: 0 auto 30px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #aaa;
+            font-size: 14px;
+        }
+        #btn-deconnexion {
+            color: #f66;
+            text-decoration: none;
+            border: 1px solid #f66;
+            padding: 4px 10px;
+            border-radius: 5px;
+        }
+        .carte {
+            max-width: 500px;
+            margin: 0 auto 20px auto;
+            background: #222;
+            padding: 25px;
+            border-radius: 10px;
+        }
+        h2 { margin-top: 0; }
+        select, input[type=text] {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            background: #333;
+            color: #eee;
+            border: 1px solid #444;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="entete">
+        <span>Connecté en tant que <strong>{{ pseudo }}</strong></span>
+        <a href="/deconnexion" id="btn-deconnexion">Déconnexion</a>
+    </div>
+
+    <div class="carte">
+        <h2>Créer une partie</h2>
+        <form method="POST" action="/creer-partie">
+            <label>Choisis un univers :</label>
+            <select name="univers">
+                {% for cle, infos in univers.items() %}
+                <option value="{{ cle }}">{{ infos.nom }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Créer la partie</button>
+        </form>
+    </div>
+
+    <div class="carte">
+        <h2>Rejoindre une partie</h2>
+        <form method="POST" action="/rejoindre-partie">
+            <input type="text" name="code" placeholder="Code de la partie (ex: AB3X9K)" required>
+            <button type="submit">Rejoindre</button>
+        </form>
+    </div>
+</body>
+</html>

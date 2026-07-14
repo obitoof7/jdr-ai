@@ -1,9 +1,11 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from groq import Groq
 import os
+import random
+import string
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,14 +25,40 @@ login_manager = LoginManager(app)
 login_manager.login_view = "connexion"
 
 
+def generer_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
+UNIVERS = {
+    "bleach": {
+        "nom": "Bleach",
+        "prompt": """Tu es le maître du jeu d'un jeu de rôle textuel se déroulant dans l'univers de Bleach.
+Tu incarnes le monde, les PNJ (Shinigami, Hollows, humains, etc.) et tu racontes les conséquences des actions des joueurs.
+Reste cohérent avec l'univers Bleach (Soul Society, Hollows, Zanpakuto, Hueco Mundo, etc.).
+Plusieurs joueurs participent à la même aventure : chaque message des joueurs commence par leur pseudo.
+Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en tenant compte des actions de TOUS les joueurs.
+Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions."""
+    }
+}
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
 
 
+class Party(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(10), unique=True, nullable=False)
+    univers = db.Column(db.String(50), nullable=False, default="bleach")
+    hote = db.Column(db.String(80), nullable=False)
+    active = db.Column(db.Boolean, default=True)
+
+
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    party_id = db.Column(db.Integer, db.ForeignKey("party.id"), nullable=False)
     auteur = db.Column(db.String(80), nullable=False)
     contenu = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(20), nullable=False)
@@ -47,6 +75,7 @@ with app.app_context():
     db.create_all()
 
 
+# --- Authentification ---
 @app.route("/inscription", methods=["GET", "POST"])
 def inscription():
     if request.method == "POST":
@@ -90,43 +119,126 @@ def deconnexion():
     return redirect(url_for("connexion"))
 
 
-PROMPT_SYSTEME = """Tu es le maître du jeu d'un jeu de rôle textuel se déroulant dans l'univers de Bleach.
-Tu incarnes le monde, les PNJ (Shinigami, Hollows, humains, etc.) et tu racontes les conséquences des actions des joueurs.
-Reste cohérent avec l'univers Bleach (Soul Society, Hollows, Zanpakuto, Hueco Mundo, etc.).
-Plusieurs joueurs participent à la même aventure : chaque message des joueurs commence par leur pseudo.
-Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en tenant compte des actions de TOUS les joueurs.
-Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions."""
-
-
+# --- Accueil (choix créer / rejoindre une partie) ---
 @app.route("/")
 @login_required
 def accueil():
-    return render_template("index.html", pseudo=current_user.username)
+    return render_template("accueil.html", pseudo=current_user.username, univers=UNIVERS)
 
 
-@app.route("/messages")
+@app.route("/creer-partie", methods=["POST"])
 @login_required
-def messages():
+def creer_partie():
+    univers_choisi = request.form.get("univers", "bleach")
+
+    code = generer_code()
+    while Party.query.filter_by(code=code).first():
+        code = generer_code()
+
+    nouvelle_partie = Party(
+        code=code,
+        univers=univers_choisi,
+        hote=current_user.username,
+        active=True
+    )
+    db.session.add(nouvelle_partie)
+    db.session.commit()
+
+    return redirect(url_for("partie", code=code))
+
+
+@app.route("/rejoindre-partie", methods=["POST"])
+@login_required
+def rejoindre_partie():
+    code = request.form.get("code", "").strip().upper()
+    partie = Party.query.filter_by(code=code).first()
+
+    if not partie:
+        return "Code de partie introuvable. <a href='/'>Retour</a>"
+
+    return redirect(url_for("partie", code=code))
+
+
+# --- La partie / le jeu ---
+@app.route("/partie/<code>")
+@login_required
+def partie(code):
+    partie = Party.query.filter_by(code=code).first()
+    if not partie:
+        abort(404)
+
+    est_hote = (partie.hote == current_user.username)
+    infos_univers = UNIVERS.get(partie.univers, UNIVERS["bleach"])
+
+    return render_template(
+        "partie.html",
+        pseudo=current_user.username,
+        code=partie.code,
+        univers_nom=infos_univers["nom"],
+        est_hote=est_hote,
+        active=partie.active
+    )
+
+
+@app.route("/partie/<code>/terminer", methods=["POST"])
+@login_required
+def terminer_partie(code):
+    partie = Party.query.filter_by(code=code).first()
+    if not partie or partie.hote != current_user.username:
+        abort(403)
+
+    partie.active = False
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/partie/<code>/relancer", methods=["POST"])
+@login_required
+def relancer_partie(code):
+    partie = Party.query.filter_by(code=code).first()
+    if not partie or partie.hote != current_user.username:
+        abort(403)
+
+    Message.query.filter_by(party_id=partie.id).delete()
+    partie.active = True
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# --- Messages et action de jeu ---
+@app.route("/partie/<code>/messages")
+@login_required
+def messages(code):
+    partie = Party.query.filter_by(code=code).first()
+    if not partie:
+        abort(404)
+
     apres_id = request.args.get("apres", 0, type=int)
-    messages_db = Message.query.filter(Message.id > apres_id).order_by(Message.id).all()
+    messages_db = Message.query.filter(
+        Message.party_id == partie.id,
+        Message.id > apres_id
+    ).order_by(Message.id).all()
+
     resultat = [
-        {
-            "id": m.id,
-            "auteur": m.auteur,
-            "contenu": m.contenu,
-            "role": m.role
-        }
+        {"id": m.id, "auteur": m.auteur, "contenu": m.contenu, "role": m.role}
         for m in messages_db
     ]
     return jsonify(resultat)
 
 
-@app.route("/jouer", methods=["POST"])
+@app.route("/partie/<code>/jouer", methods=["POST"])
 @login_required
-def jouer():
+def jouer(code):
+    partie = Party.query.filter_by(code=code).first()
+    if not partie:
+        abort(404)
+    if not partie.active:
+        return jsonify({"erreur": "Cette partie est terminée."}), 400
+
     action_joueur = request.json.get("action", "")
 
     msg_joueur = Message(
+        party_id=partie.id,
         auteur=current_user.username,
         contenu=action_joueur,
         role="user",
@@ -135,8 +247,9 @@ def jouer():
     db.session.add(msg_joueur)
     db.session.commit()
 
-    messages_db = Message.query.order_by(Message.id).all()
-    historique = [{"role": "system", "content": PROMPT_SYSTEME}]
+    infos_univers = UNIVERS.get(partie.univers, UNIVERS["bleach"])
+    messages_db = Message.query.filter_by(party_id=partie.id).order_by(Message.id).all()
+    historique = [{"role": "system", "content": infos_univers["prompt"]}]
     for m in messages_db:
         prefixe = f"{m.auteur}: " if m.role == "user" else ""
         historique.append({"role": m.role, "content": f"{prefixe}{m.contenu}"})
@@ -148,6 +261,7 @@ def jouer():
     texte_reponse = reponse.choices[0].message.content
 
     msg_ia = Message(
+        party_id=partie.id,
         auteur="MJ",
         contenu=texte_reponse,
         role="assistant",

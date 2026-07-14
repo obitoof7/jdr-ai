@@ -2,28 +2,60 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>JDR Bleach - IA</title>
+    <title>JDR - {{ univers_nom }}</title>
     <style>
         body { background: #111; color: #eee; font-family: Arial, sans-serif; padding: 20px; }
         #entete {
             max-width: 700px;
-            margin: 0 auto 15px auto;
+            margin: 0 auto 10px auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
             color: #aaa;
             font-size: 14px;
         }
-        #btn-deconnexion {
+        #infos-partie {
+            max-width: 700px;
+            margin: 0 auto 15px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #888;
+        }
+        #code-partie {
+            background: #222;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #6cf;
+        }
+        #btn-deconnexion, #btn-accueil {
             color: #f66;
             text-decoration: none;
             border: 1px solid #f66;
             padding: 4px 10px;
             border-radius: 5px;
+            margin-left: 8px;
         }
-        #btn-deconnexion:hover {
-            background: #f66;
-            color: #111;
+        #btn-terminer {
+            background: #a33;
+            color: #eee;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        #btn-relancer {
+            background: #3a3;
+            color: #eee;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
         }
         #chat { max-width: 700px; margin: auto; }
         .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
@@ -33,23 +65,52 @@
         .mj { background: #333; }
         #zone-saisie { display: flex; max-width: 700px; margin: 20px auto; }
         #action { flex: 1; padding: 10px; font-size: 16px; }
-        button { padding: 10px 20px; font-size: 16px; }
+        button.envoyer { padding: 10px 20px; font-size: 16px; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #bandeau-terminee {
+            max-width: 700px;
+            margin: 0 auto 15px auto;
+            background: #542;
+            color: #fc8;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div id="entete">
         <span>Connecté en tant que <strong>{{ pseudo }}</strong></span>
-        <a href="/deconnexion" id="btn-deconnexion">Déconnexion</a>
+        <div>
+            <a href="/" id="btn-accueil">Accueil</a>
+            <a href="/deconnexion" id="btn-deconnexion">Déconnexion</a>
+        </div>
     </div>
+
+    <div id="infos-partie">
+        <span>Univers : <strong>{{ univers_nom }}</strong> — Code : <span id="code-partie">{{ code }}</span></span>
+        {% if est_hote %}
+            {% if active %}
+            <button id="btn-terminer" onclick="terminerPartie()">Terminer la partie</button>
+            {% else %}
+            <button id="btn-relancer" onclick="relancerPartie()">Relancer une nouvelle histoire</button>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    {% if not active %}
+    <div id="bandeau-terminee">Cette partie est terminée. {% if est_hote %}Tu peux la relancer avec le bouton ci-dessus.{% endif %}</div>
+    {% endif %}
+
     <div id="chat"></div>
     <div id="zone-saisie">
-        <input type="text" id="action" placeholder="Que fais-tu ?">
-        <button id="btn-envoyer" onclick="envoyer()">Envoyer</button>
+        <input type="text" id="action" placeholder="Que fais-tu ?" {% if not active %}disabled{% endif %}>
+        <button class="envoyer" id="btn-envoyer" onclick="envoyer()" {% if not active %}disabled{% endif %}>Envoyer</button>
     </div>
 
     <script>
         const monPseudo = "{{ pseudo }}";
+        const codePartie = "{{ code }}";
         let dernierId = 0;
         let envoiEnCours = false;
 
@@ -67,7 +128,7 @@
             bouton.disabled = true;
 
             try {
-                await fetch("/jouer", {
+                await fetch(`/partie/${codePartie}/jouer`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: texte })
@@ -105,12 +166,24 @@
         }
 
         async function chargerMessages() {
-            const reponse = await fetch(`/messages?apres=${dernierId}`);
+            const reponse = await fetch(`/partie/${codePartie}/messages?apres=${dernierId}`);
             const nouveaux = await reponse.json();
             nouveaux.forEach(msg => {
                 ajouterMessage(msg);
                 dernierId = msg.id;
             });
+        }
+
+        async function terminerPartie() {
+            if (!confirm("Terminer la partie pour tous les joueurs ?")) return;
+            await fetch(`/partie/${codePartie}/terminer`, { method: "POST" });
+            location.reload();
+        }
+
+        async function relancerPartie() {
+            if (!confirm("Relancer effacera l'historique actuel. Continuer ?")) return;
+            await fetch(`/partie/${codePartie}/relancer`, { method: "POST" });
+            location.reload();
         }
 
         document.getElementById("action").addEventListener("keypress", function(e) {
