@@ -6,12 +6,12 @@
     <style>
         body { background: #111; color: #eee; font-family: Arial, sans-serif; padding: 20px; }
         #entete {
-            max-width: 1100px; margin: 0 auto 10px auto;
+            max-width: 1400px; margin: 0 auto 10px auto;
             display: flex; justify-content: space-between; align-items: center;
             color: #aaa; font-size: 14px;
         }
         #infos-partie {
-            max-width: 1100px; margin: 0 auto 15px auto;
+            max-width: 1400px; margin: 0 auto 15px auto;
             display: flex; justify-content: space-between; align-items: center;
             font-size: 13px; color: #888;
         }
@@ -22,9 +22,21 @@
         }
         #btn-terminer { background: #a33; color: #eee; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; }
         #btn-relancer { background: #3a3; color: #eee; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; }
-        #statut-connexion { display: none; }
+        #statut-connexion, #statut-connexion-prive { display: none; }
 
-        #layout { max-width: 1100px; margin: auto; display: flex; gap: 15px; align-items: flex-start; }
+        #layout { max-width: 1400px; margin: auto; display: flex; gap: 15px; align-items: flex-start; }
+
+        #colonne-prive {
+            width: 280px; background: #1a1420; border-radius: 10px; padding: 12px;
+            flex-shrink: 0; display: flex; flex-direction: column;
+        }
+        #colonne-prive h3 { margin: 0 0 8px 0; color: #c9a; font-size: 14px; }
+        #colonne-prive .sous-titre { font-size: 11px; color: #776; margin-bottom: 10px; }
+        #chat-prive { flex: 1; min-height: 300px; max-height: 500px; overflow-y: auto; }
+        #zone-saisie-prive { display: flex; margin-top: 10px; gap: 5px; }
+        #action-privee { flex: 1; padding: 8px; font-size: 13px; background: #222; color: #eee; border: 1px solid #443; }
+        #btn-envoyer-prive { padding: 8px 12px; font-size: 13px; background: #635; color: #eee; border: none; border-radius: 4px; cursor: pointer; }
+
         #colonne-chat { flex: 1; min-width: 0; }
         #colonne-perso {
             width: 220px; background: #1a1a1a; border-radius: 10px; padding: 15px;
@@ -47,24 +59,26 @@
         #de-affiche.critique-echec { background: #a22; color: #fff; }
         #de-resultat-texte { font-size: 13px; color: #aaa; }
 
-        #chat { }
         .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
         .joueur { background: #2a4d69; text-align: right; }
         .autre-joueur { background: #4a2a69; }
         .autre-joueur .nom-auteur { color: #c9a; font-size: 12px; display: block; margin-bottom: 4px; }
         .mj { background: #333; }
+        .mj-prive { background: #3a2a44; font-size: 13px; }
+        .prive-perso { background: #443; text-align: right; font-size: 13px; }
         .jet-message {
             background: #222; border: 1px dashed #555; text-align: center;
             font-size: 13px; color: #ccc; padding: 8px;
         }
         .jet-message.mon-jet { border-color: #6cf; color: #6cf; }
+        .jet-message.jet-prive { border-color: #c9a; color: #c9a; font-size: 12px; }
 
-        #zone-saisie { display: flex; max-width: 1100px; margin: 20px auto; }
+        #zone-saisie { display: flex; max-width: 100%; margin: 20px 0 0 0; }
         #action { flex: 1; padding: 10px; font-size: 16px; }
         button.envoyer { padding: 10px 20px; font-size: 16px; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #bandeau-terminee {
-            max-width: 1100px; margin: 0 auto 15px auto; background: #542; color: #fc8;
+            max-width: 1400px; margin: 0 auto 15px auto; background: #542; color: #fc8;
             padding: 10px; border-radius: 8px; text-align: center;
         }
     </style>
@@ -94,6 +108,17 @@
     {% endif %}
 
     <div id="layout">
+        <div id="colonne-prive">
+            <h3>🔒 Aparté secret</h3>
+            <div class="sous-titre">Visible seulement par toi. Utilise-le pour agir seul, discrètement, ou parler en privé à un PNJ.</div>
+            <div id="statut-connexion-prive"></div>
+            <div id="chat-prive"></div>
+            <div id="zone-saisie-prive">
+                <input type="text" id="action-privee" placeholder="Action secrète...">
+                <button id="btn-envoyer-prive" onclick="envoyerPrive()">Envoyer</button>
+            </div>
+        </div>
+
         <div id="colonne-chat">
             <div id="statut-connexion"></div>
             <div id="chat"></div>
@@ -125,11 +150,12 @@
         const codePartie = "{{ code }}";
         let dernierId = 0;
         let envoiEnCours = false;
+        let envoiPriveEnCours = false;
 
-        function afficherStatut(texte, actif) {
-            const statut = document.getElementById("statut-connexion");
+        function afficherStatut(idElement, texte, actif) {
+            const statut = document.getElementById(idElement);
             if (actif) {
-                statut.style.cssText = "display:block;background:#542;color:#fc8;padding:8px;border-radius:6px;text-align:center;font-size:13px;margin-bottom:10px;";
+                statut.style.cssText = "display:block;background:#542;color:#fc8;padding:8px;border-radius:6px;text-align:center;font-size:12px;margin-bottom:10px;";
                 statut.textContent = texte;
             } else {
                 statut.style.display = "none";
@@ -156,6 +182,16 @@
             setTimeout(() => { de.style.transform = "scale(1)"; }, 300);
         }
 
+        async function envoyerAction(texte, prive) {
+            const idUnique = crypto.randomUUID();
+            const reponse = await fetch(`/partie/${codePartie}/jouer`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: texte, requete_id: idUnique, prive: prive })
+            });
+            if (!reponse.ok) throw new Error("Erreur serveur");
+        }
+
         async function envoyer() {
             if (envoiEnCours) return;
 
@@ -168,20 +204,13 @@
             input.value = "";
             input.disabled = true;
             bouton.disabled = true;
-            afficherStatut("Envoi en cours... (le serveur peut mettre jusqu'à 50s à se réveiller)", true);
-
-            const idUnique = crypto.randomUUID();
+            afficherStatut("statut-connexion", "Envoi en cours... (le serveur peut mettre jusqu'à 50s à se réveiller)", true);
 
             try {
-                const reponse = await fetch(`/partie/${codePartie}/jouer`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: texte, requete_id: idUnique })
-                });
-                if (!reponse.ok) throw new Error("Erreur serveur");
-                afficherStatut("", false);
+                await envoyerAction(texte, false);
+                afficherStatut("statut-connexion", "", false);
             } catch (err) {
-                afficherStatut("Connexion perdue, nouvelle tentative...", true);
+                afficherStatut("statut-connexion", "Connexion perdue, nouvelle tentative...", true);
                 input.value = texte;
             } finally {
                 input.disabled = false;
@@ -192,21 +221,53 @@
             }
         }
 
+        async function envoyerPrive() {
+            if (envoiPriveEnCours) return;
+
+            const input = document.getElementById("action-privee");
+            const bouton = document.getElementById("btn-envoyer-prive");
+            const texte = input.value.trim();
+            if (!texte) return;
+
+            envoiPriveEnCours = true;
+            input.value = "";
+            input.disabled = true;
+            bouton.disabled = true;
+            afficherStatut("statut-connexion-prive", "Envoi en cours...", true);
+
+            try {
+                await envoyerAction(texte, true);
+                afficherStatut("statut-connexion-prive", "", false);
+            } catch (err) {
+                afficherStatut("statut-connexion-prive", "Connexion perdue, nouvelle tentative...", true);
+                input.value = texte;
+            } finally {
+                input.disabled = false;
+                bouton.disabled = false;
+                input.focus();
+                envoiPriveEnCours = false;
+                chargerMessages();
+            }
+        }
+
         function ajouterMessage(msg) {
-            const chat = document.getElementById("chat");
+            const cible = msg.canal === "prive" ? document.getElementById("chat-prive") : document.getElementById("chat");
             const div = document.createElement("div");
 
             if (msg.type_special === "jet_de_de") {
                 const estMonJet = msg.donnees_jet && msg.donnees_jet.jet !== undefined;
-                div.className = "message jet-message" + (estMonJet ? " mon-jet" : "");
+                div.className = "message jet-message" + (msg.canal === "prive" ? " jet-prive" : (estMonJet ? " mon-jet" : ""));
                 if (estMonJet) {
-                    afficherDe(msg.donnees_jet);
-                    div.textContent = `🎲 Ton jet — ${msg.donnees_jet.stat} : ${msg.donnees_jet.jet} + ${msg.donnees_jet.modificateur} = ${msg.donnees_jet.total} → ${msg.donnees_jet.resultat}`;
+                    if (msg.canal !== "prive") afficherDe(msg.donnees_jet);
+                    div.textContent = `🎲 ${msg.donnees_jet.stat} : ${msg.donnees_jet.jet} + ${msg.donnees_jet.modificateur} = ${msg.donnees_jet.total} → ${msg.donnees_jet.resultat}`;
                 } else {
                     div.textContent = `🎲 ${msg.donnees_jet.auteur} : ${msg.donnees_jet.resultat}`;
                 }
             } else if (msg.role === "assistant") {
-                div.className = "message mj";
+                div.className = msg.canal === "prive" ? "message mj-prive" : "message mj";
+                div.textContent = msg.contenu;
+            } else if (msg.canal === "prive") {
+                div.className = "message prive-perso";
                 div.textContent = msg.contenu;
             } else if (msg.auteur === monPseudo) {
                 div.className = "message joueur";
@@ -220,8 +281,8 @@
                 div.appendChild(document.createTextNode(msg.contenu));
             }
 
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
+            cible.appendChild(div);
+            cible.scrollTop = cible.scrollHeight;
         }
 
         async function chargerMessages() {
@@ -233,9 +294,9 @@
                     ajouterMessage(msg);
                     dernierId = msg.id;
                 });
-                afficherStatut("", false);
+                afficherStatut("statut-connexion", "", false);
             } catch (err) {
-                afficherStatut("Connexion au serveur perdue, nouvelle tentative...", true);
+                afficherStatut("statut-connexion", "Connexion au serveur perdue, nouvelle tentative...", true);
             }
         }
 
@@ -253,6 +314,9 @@
 
         document.getElementById("action").addEventListener("keypress", function(e) {
             if (e.key === "Enter") envoyer();
+        });
+        document.getElementById("action-privee").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") envoyerPrive();
         });
 
         chargerMessages();

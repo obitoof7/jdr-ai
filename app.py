@@ -41,7 +41,8 @@ Plusieurs joueurs participent à la même aventure : chaque message des joueurs 
 Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en tenant compte des actions de TOUS les joueurs.
 Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions.
 IMPORTANT: Pour chaque action d'un joueur, un résultat de jet de dé te sera donné (réussite critique, réussite, échec, ou échec critique). Tu DOIS respecter ce résultat dans ta narration : ne fais jamais réussir une action si le résultat indique un échec, et inversement.
-Les personnages possèdent aussi un Reiatsu (pression/énergie spirituelle) qui reflète leur puissance spirituelle brute : utilise-le dans ta narration lors de libérations de pouvoir, de Kido, de Shikai/Bankai ou de manifestations de pression spirituelle.""",
+Les personnages possèdent aussi un Reiatsu (pression/énergie spirituelle) qui reflète leur puissance spirituelle brute : utilise-le dans ta narration lors de libérations de pouvoir, de Kido, de Shikai/Bankai ou de manifestations de pression spirituelle.
+IMPORTANT SUR LE PRIVÉ: certains messages sont marqués [ACTION PRIVÉE de X]. Ce sont des actions solitaires ou secrètes (fouiller seul, parler discrètement à un PNJ, etc.). Ta réponse à une action privée ne doit être connue QUE du joueur concerné : ne révèle JAMAIS dans le chat public une information qu'un joueur a obtenue uniquement en privé, sauf si ce joueur la partage lui-même publiquement dans un message ultérieur.""",
         "prompt_generation": """Génère un personnage aléatoire pour un jeu de rôle dans l'univers de Bleach.
 Réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après, format exact :
 {"race": "...", "classe": "...", "force": X, "agilite": X, "intelligence": X, "esprit": X, "chance": X, "reiatsu": X}
@@ -119,8 +120,6 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
-    # Migration légère : ajoute la colonne reiatsu si la table personnage existait déjà
-    # (sans cette colonne) avant cette mise à jour.
     try:
         db.session.execute(db.text("ALTER TABLE personnage ADD COLUMN reiatsu INTEGER DEFAULT 10"))
         db.session.commit()
@@ -319,19 +318,23 @@ def messages(code):
 
     resultat = []
     for m in messages_db:
+        # Un message privé n'appartenant pas au joueur courant est totalement invisible
+        if m.visibilite == "prive" and m.destinataire != current_user.username:
+            continue
+
         item = {
             "id": m.id, "auteur": m.auteur, "contenu": m.contenu,
-            "role": m.role, "type_special": m.type_special
+            "role": m.role, "type_special": m.type_special,
+            "canal": m.visibilite
         }
         if m.donnees_jet:
             dj = json.loads(m.donnees_jet)
-            if dj["auteur"] == current_user.username:
+            if m.visibilite == "prive":
+                item["donnees_jet"] = dj
+            elif dj["auteur"] == current_user.username:
                 item["donnees_jet"] = dj
             else:
-                item["donnees_jet"] = {
-                    "auteur": dj["auteur"],
-                    "resultat": dj["resultat"]
-                }
+                item["donnees_jet"] = {"auteur": dj["auteur"], "resultat": dj["resultat"]}
         resultat.append(item)
 
     return jsonify(resultat)
@@ -348,6 +351,7 @@ def jouer(code):
 
     action_joueur = request.json.get("action", "")
     requete_id = request.json.get("requete_id")
+    prive = bool(request.json.get("prive", False))
 
     if requete_id:
         deja_traite = Message.query.filter_by(
@@ -375,12 +379,16 @@ def jouer(code):
     else:
         resultat = "échec"
 
+    visibilite = "prive" if prive else "public"
+    destinataire = current_user.username if prive else None
+
     msg_joueur = Message(
         party_id=p.id,
         auteur=current_user.username,
         contenu=action_joueur,
         role="user",
-        visibilite="public",
+        visibilite=visibilite,
+        destinataire=destinataire,
         requete_id=requete_id
     )
     db.session.add(msg_joueur)
@@ -399,7 +407,9 @@ def jouer(code):
         contenu="",
         role="jet",
         type_special="jet_de_de",
-        donnees_jet=json.dumps(donnees_jet)
+        donnees_jet=json.dumps(donnees_jet),
+        visibilite=visibilite,
+        destinataire=destinataire
     )
     db.session.add(msg_jet)
     db.session.commit()
@@ -415,6 +425,8 @@ def jouer(code):
             historique.append({"role": "system", "content": note})
         else:
             prefixe = f"{m.auteur}: " if m.role == "user" else ""
+            if m.visibilite == "prive" and m.role == "user":
+                prefixe = f"[ACTION PRIVÉE de {m.auteur}]: "
             historique.append({"role": m.role, "content": f"{prefixe}{m.contenu}"})
 
     reponse = client.chat.completions.create(
@@ -428,7 +440,8 @@ def jouer(code):
         auteur="MJ",
         contenu=texte_reponse,
         role="assistant",
-        visibilite="public"
+        visibilite=visibilite,
+        destinataire=destinataire
     )
     db.session.add(msg_ia)
     db.session.commit()
