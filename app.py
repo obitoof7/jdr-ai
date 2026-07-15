@@ -26,6 +26,8 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "connexion"
 
+ZONE_DEFAUT = "Ensemble"
+
 
 def generer_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -98,6 +100,7 @@ class Personnage(db.Model):
     esprit = db.Column(db.Integer, default=10)
     chance = db.Column(db.Integer, default=10)
     reiatsu = db.Column(db.Integer, default=10)
+    zone = db.Column(db.String(80), default=ZONE_DEFAUT)
 
 
 class Message(db.Model):
@@ -120,11 +123,19 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
-    try:
-        db.session.execute(db.text("ALTER TABLE personnage ADD COLUMN reiatsu INTEGER DEFAULT 10"))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+    for ddl in [
+        "ALTER TABLE personnage ADD COLUMN reiatsu INTEGER DEFAULT 10",
+        f"ALTER TABLE personnage ADD COLUMN zone VARCHAR(80) DEFAULT '{ZONE_DEFAUT}'",
+    ]:
+        try:
+            db.session.execute(db.text(ddl))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+
+def modificateur_de(valeur):
+    return round((valeur - 10) / 2)
 
 
 def generer_personnage(party_id, username, univers_cle):
@@ -149,7 +160,8 @@ def generer_personnage(party_id, username, univers_cle):
             intelligence=int(data.get("intelligence", 10)),
             esprit=int(data.get("esprit", 10)),
             chance=int(data.get("chance", 10)),
-            reiatsu=int(data.get("reiatsu", 10))
+            reiatsu=int(data.get("reiatsu", 10)),
+            zone=ZONE_DEFAUT
         )
     except Exception:
         perso = Personnage(
@@ -162,7 +174,8 @@ def generer_personnage(party_id, username, univers_cle):
             intelligence=random.randint(8, 15),
             esprit=random.randint(8, 15),
             chance=random.randint(8, 15),
-            reiatsu=random.randint(8, 15)
+            reiatsu=random.randint(8, 15),
+            zone=ZONE_DEFAUT
         )
 
     db.session.add(perso)
@@ -216,7 +229,21 @@ def deconnexion():
 @app.route("/")
 @login_required
 def accueil():
-    return render_template("accueil.html", pseudo=current_user.username, univers=UNIVERS)
+    mes_persos = Personnage.query.filter_by(username=current_user.username).all()
+    party_ids = [p.party_id for p in mes_persos]
+    mes_parties = []
+    if party_ids:
+        parties_db = Party.query.filter(Party.id.in_(party_ids)).order_by(Party.id.desc()).all()
+        for p in parties_db:
+            infos_univers = UNIVERS.get(p.univers, UNIVERS["bleach"])
+            mes_parties.append({
+                "code": p.code,
+                "univers_nom": infos_univers["nom"],
+                "active": p.active,
+                "est_hote": p.hote == current_user.username
+            })
+
+    return render_template("accueil.html", pseudo=current_user.username, univers=UNIVERS, mes_parties=mes_parties)
 
 
 @app.route("/creer-partie", methods=["POST"])
@@ -303,6 +330,25 @@ def relancer_partie(code):
     return jsonify({"ok": True})
 
 
+@app.route("/partie/<code>/zone", methods=["POST"])
+@login_required
+def changer_zone(code):
+    p = Party.query.filter_by(code=code).first()
+    if not p:
+        abort(404)
+
+    nouvelle_zone = request.json.get("zone", "").strip()
+    if not nouvelle_zone:
+        return jsonify({"erreur": "Zone vide"}), 400
+
+    perso = Personnage.query.filter_by(party_id=p.id, username=current_user.username).first()
+    if perso:
+        perso.zone = nouvelle_zone[:80]
+        db.session.commit()
+
+    return jsonify({"ok": True, "zone": perso.zone})
+
+
 @app.route("/partie/<code>/messages")
 @login_required
 def messages(code):
@@ -318,14 +364,12 @@ def messages(code):
 
     resultat = []
     for m in messages_db:
-        # Un message privé n'appartenant pas au joueur courant est totalement invisible
         if m.visibilite == "prive" and m.destinataire != current_user.username:
             continue
 
         item = {
             "id": m.id, "auteur": m.auteur, "contenu": m.contenu,
-            "role": m.role, "type_special": m.type_special,
-            "canal": m.visibilite
+            "role": m.role, "type_special": m.type_special
         }
         if m.donnees_jet:
             dj = json.loads(m.donnees_jet)
@@ -338,6 +382,42 @@ def messages(code):
         resultat.append(item)
 
     return jsonify(resultat)
+
+
+def tenter_perceptions(p, acteur_username, acteur_perso, action_texte):
+    """Pour une action privée, vérifie si d'autres joueurs présents dans la même zone
+    perçoivent (partiellement) que quelque chose se passe, selon leur Esprit vs la discrétion de l'acteur."""
+    if not acteur_perso:
+        return
+
+    autres = Personnage.query.filter(
+        Personnage.party_id == p.id,
+        Personnage.username != acteur_username,
+        Personnage.zone == acteur_perso.zone
+    ).all()
+
+    mod_discretion = modificateur_de(acteur_perso.agilite)
+    difficulte = 12 + mod_discretion
+
+    for observateur in autres:
+        mod_esprit = modificateur_de(observateur.esprit)
+        jet_perception = random.randint(1, 20)
+        total_perception = jet_perception + mod_esprit
+
+        if jet_perception != 1 and (jet_perception == 20 or total_perception >= difficulte):
+            indice = f"Tu remarques que {acteur_username} agit étrangement, à l'écart, mais tu ne distingues pas exactement quoi."
+            msg_perception = Message(
+                party_id=p.id,
+                auteur="MJ",
+                contenu=indice,
+                role="assistant",
+                visibilite="prive",
+                destinataire=observateur.username,
+                type_special="perception"
+            )
+            db.session.add(msg_perception)
+
+    db.session.commit()
 
 
 @app.route("/partie/<code>/jouer", methods=["POST"])
@@ -365,7 +445,7 @@ def jouer(code):
 
     stat_utilisee = deviner_stat(action_joueur)
     valeur_stat = getattr(perso, stat_utilisee) if perso else 10
-    modificateur = round((valeur_stat - 10) / 2)
+    modificateur = modificateur_de(valeur_stat)
 
     jet = random.randint(1, 20)
     total = jet + modificateur
@@ -414,11 +494,16 @@ def jouer(code):
     db.session.add(msg_jet)
     db.session.commit()
 
+    if prive:
+        tenter_perceptions(p, current_user.username, perso, action_joueur)
+
     infos_univers = UNIVERS.get(p.univers, UNIVERS["bleach"])
     messages_db = Message.query.filter_by(party_id=p.id).order_by(Message.id).all()
 
     historique = [{"role": "system", "content": infos_univers["prompt"]}]
     for m in messages_db:
+        if m.type_special == "perception":
+            continue
         if m.role == "jet":
             dj = json.loads(m.donnees_jet)
             note = f"[Jet de {dj['auteur']} - stat {dj['stat']}: {dj['jet']} + {dj['modificateur']} = {dj['total']} => {dj['resultat'].upper()}]"

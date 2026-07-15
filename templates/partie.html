@@ -47,6 +47,8 @@
         .stat-valeur { color: #eee; font-weight: bold; }
         .reiatsu-ligne { border-top: 1px solid #333; padding-top: 8px; margin-top: 10px; color: #a8d; }
         .reiatsu-ligne .stat-valeur { color: #c9f; }
+        .zone-ligne { border-top: 1px solid #333; padding-top: 8px; margin-top: 10px; font-size: 12px; color: #999; }
+        .zone-valeur { color: #8cf; font-weight: bold; }
 
         #de-container { margin-top: 15px; text-align: center; }
         #de-affiche {
@@ -81,6 +83,9 @@
             max-width: 1400px; margin: 0 auto 15px auto; background: #542; color: #fc8;
             padding: 10px; border-radius: 8px; text-align: center;
         }
+        #astuce-zone {
+            max-width: 1400px; margin: 0 auto 10px auto; font-size: 11px; color: #666;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +107,8 @@
             {% endif %}
         {% endif %}
     </div>
+
+    <div id="astuce-zone">💡 Astuce : tape <strong>/zone NomDeLaZone</strong> (ex: /zone Ruelle nord) pour te déplacer et changer qui peut te remarquer.</div>
 
     {% if not active %}
     <div id="bandeau-terminee">Cette partie est terminée. {% if est_hote %}Tu peux la relancer avec le bouton ci-dessus.{% endif %}</div>
@@ -137,6 +144,7 @@
             <div class="stat-ligne"><span>Esprit</span><span class="stat-valeur">{{ perso.esprit }}</span></div>
             <div class="stat-ligne"><span>Chance</span><span class="stat-valeur">{{ perso.chance }}</span></div>
             <div class="stat-ligne reiatsu-ligne"><span>Reiatsu</span><span class="stat-valeur">{{ perso.reiatsu }}</span></div>
+            <div class="zone-ligne">Zone actuelle : <span class="zone-valeur" id="zone-actuelle">{{ perso.zone }}</span></div>
 
             <div id="de-container">
                 <div id="de-affiche">-</div>
@@ -151,6 +159,7 @@
         let dernierId = 0;
         let envoiEnCours = false;
         let envoiPriveEnCours = false;
+        let chargementEnCours = false;
 
         function afficherStatut(idElement, texte, actif) {
             const statut = document.getElementById(idElement);
@@ -192,6 +201,18 @@
             if (!reponse.ok) throw new Error("Erreur serveur");
         }
 
+        async function changerZone(nouvelleZone) {
+            const reponse = await fetch(`/partie/${codePartie}/zone`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ zone: nouvelleZone })
+            });
+            if (reponse.ok) {
+                const data = await reponse.json();
+                document.getElementById("zone-actuelle").textContent = data.zone;
+            }
+        }
+
         async function envoyer() {
             if (envoiEnCours) return;
 
@@ -199,6 +220,21 @@
             const bouton = document.getElementById("btn-envoyer");
             const texte = input.value.trim();
             if (!texte) return;
+
+            if (texte.toLowerCase().startsWith("/zone ")) {
+                const nouvelleZone = texte.substring(6).trim();
+                input.value = "";
+                if (nouvelleZone) {
+                    await changerZone(nouvelleZone);
+                    const chat = document.getElementById("chat");
+                    const div = document.createElement("div");
+                    div.className = "message mj";
+                    div.textContent = `📍 Tu es maintenant dans : ${nouvelleZone}`;
+                    chat.appendChild(div);
+                    chat.scrollTop = chat.scrollHeight;
+                }
+                return;
+            }
 
             envoiEnCours = true;
             input.value = "";
@@ -228,6 +264,21 @@
             const bouton = document.getElementById("btn-envoyer-prive");
             const texte = input.value.trim();
             if (!texte) return;
+
+            if (texte.toLowerCase().startsWith("/zone ")) {
+                const nouvelleZone = texte.substring(6).trim();
+                input.value = "";
+                if (nouvelleZone) {
+                    await changerZone(nouvelleZone);
+                    const chatP = document.getElementById("chat-prive");
+                    const div = document.createElement("div");
+                    div.className = "message mj-prive";
+                    div.textContent = `📍 Tu es maintenant dans : ${nouvelleZone}`;
+                    chatP.appendChild(div);
+                    chatP.scrollTop = chatP.scrollHeight;
+                }
+                return;
+            }
 
             envoiPriveEnCours = true;
             input.value = "";
@@ -264,8 +315,15 @@
                     div.textContent = `🎲 ${msg.donnees_jet.auteur} : ${msg.donnees_jet.resultat}`;
                 }
             } else if (msg.role === "assistant") {
-                div.className = msg.canal === "prive" ? "message mj-prive" : "message mj";
-                div.textContent = msg.contenu;
+                if (msg.type_special === "perception") {
+                    div.className = "message mj-prive";
+                    div.style.fontStyle = "italic";
+                    div.style.borderLeft = "3px solid #c9a";
+                    div.textContent = `👁️ ${msg.contenu}`;
+                } else {
+                    div.className = msg.canal === "prive" ? "message mj-prive" : "message mj";
+                    div.textContent = msg.contenu;
+                }
             } else if (msg.canal === "prive") {
                 div.className = "message prive-perso";
                 div.textContent = msg.contenu;
@@ -284,8 +342,6 @@
             cible.appendChild(div);
             cible.scrollTop = cible.scrollHeight;
         }
-
-        let chargementEnCours = false;
 
         async function chargerMessages() {
             if (chargementEnCours) return;

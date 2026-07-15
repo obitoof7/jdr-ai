@@ -44,12 +44,60 @@
             font-size: 16px;
             cursor: pointer;
         }
+        .partie-ligne {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background: #2a2a2a;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #eee;
+        }
+        .partie-ligne:hover { background: #333; }
+        .partie-info { display: flex; flex-direction: column; }
+        .partie-code { font-family: monospace; color: #6cf; font-size: 13px; }
+        .partie-univers { font-size: 14px; }
+        .badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+        .badge-active { background: #2a5; color: #fff; }
+        .badge-inactive { background: #555; color: #ccc; }
+        .badge-hote { background: #a63; color: #fff; margin-left: 6px; }
+        .aucune-partie { color: #777; font-size: 14px; text-align: center; padding: 15px 0; }
     </style>
 </head>
 <body>
     <div id="entete">
         <span>Connecté en tant que <strong>{{ pseudo }}</strong></span>
         <a href="/deconnexion" id="btn-deconnexion">Déconnexion</a>
+    </div>
+
+    <div class="carte">
+        <h2>Tes parties</h2>
+        {% if mes_parties %}
+            {% for p in mes_parties %}
+            <a href="/partie/{{ p.code }}" class="partie-ligne">
+                <div class="partie-info">
+                    <span class="partie-univers">{{ p.univers_nom }}</span>
+                    <span class="partie-code">{{ p.code }}</span>
+                </div>
+                <div>
+                    {% if p.est_hote %}<span class="badge badge-hote">Hôte</span>{% endif %}
+                    {% if p.active %}
+                    <span class="badge badge-active">Active</span>
+                    {% else %}
+                    <span class="badge badge-inactive">Terminée</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="aucune-partie">Tu n'as encore rejoint aucune partie.</div>
+        {% endif %}
     </div>
 
     <div class="carte">
