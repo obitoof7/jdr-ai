@@ -33,6 +33,8 @@
         #colonne-perso h3 { margin-top: 0; color: #6cf; font-size: 16px; }
         .stat-ligne { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; color: #ccc; }
         .stat-valeur { color: #eee; font-weight: bold; }
+        .reiatsu-ligne { border-top: 1px solid #333; padding-top: 8px; margin-top: 10px; color: #a8d; }
+        .reiatsu-ligne .stat-valeur { color: #c9f; }
 
         #de-container { margin-top: 15px; text-align: center; }
         #de-affiche {
@@ -109,6 +111,7 @@
             <div class="stat-ligne"><span>Intelligence</span><span class="stat-valeur">{{ perso.intelligence }}</span></div>
             <div class="stat-ligne"><span>Esprit</span><span class="stat-valeur">{{ perso.esprit }}</span></div>
             <div class="stat-ligne"><span>Chance</span><span class="stat-valeur">{{ perso.chance }}</span></div>
+            <div class="stat-ligne reiatsu-ligne"><span>Reiatsu</span><span class="stat-valeur">{{ perso.reiatsu }}</span></div>
 
             <div id="de-container">
                 <div id="de-affiche">-</div>

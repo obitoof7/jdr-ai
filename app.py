@@ -40,16 +40,21 @@ Reste cohérent avec l'univers Bleach (Soul Society, Hollows, Zanpakuto, Hueco M
 Plusieurs joueurs participent à la même aventure : chaque message des joueurs commence par leur pseudo.
 Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en tenant compte des actions de TOUS les joueurs.
 Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions.
-IMPORTANT: Pour chaque action d'un joueur, un résultat de jet de dé te sera donné (réussite critique, réussite, échec, ou échec critique). Tu DOIS respecter ce résultat dans ta narration : ne fais jamais réussir une action si le résultat indique un échec, et inversement.""",
+IMPORTANT: Pour chaque action d'un joueur, un résultat de jet de dé te sera donné (réussite critique, réussite, échec, ou échec critique). Tu DOIS respecter ce résultat dans ta narration : ne fais jamais réussir une action si le résultat indique un échec, et inversement.
+Les personnages possèdent aussi un Reiatsu (pression/énergie spirituelle) qui reflète leur puissance spirituelle brute : utilise-le dans ta narration lors de libérations de pouvoir, de Kido, de Shikai/Bankai ou de manifestations de pression spirituelle.""",
         "prompt_generation": """Génère un personnage aléatoire pour un jeu de rôle dans l'univers de Bleach.
 Réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après, format exact :
-{"race": "...", "classe": "...", "force": X, "agilite": X, "intelligence": X, "esprit": X, "chance": X}
+{"race": "...", "classe": "...", "force": X, "agilite": X, "intelligence": X, "esprit": X, "chance": X, "reiatsu": X}
 La race doit être cohérente avec Bleach (humain, Shinigami, Hollow, Quincy, etc.). La classe est son rôle/spécialité.
-Chaque statistique (force, agilite, intelligence, esprit, chance) doit être un nombre entier entre 5 et 18."""
+Le Reiatsu représente la puissance spirituelle brute du personnage (utile pour le Kido, le Shikai/Bankai, la pression spirituelle).
+Chaque statistique (force, agilite, intelligence, esprit, chance, reiatsu) doit être un nombre entier entre 5 et 18."""
     }
 }
 
 MOTS_CLES_STATS = {
+    "reiatsu": ["reiatsu", "kido", "kidō", "shikai", "bankai", "zanpakuto", "zanpakutô", "getsuga",
+                "cero", "hollowfication", "libère son pouvoir", "libère sa pression", "pression spirituelle",
+                "énergie spirituelle", "energie spirituelle"],
     "force": ["frappe", "attaque", "pousse", "soulève", "casse", "brise", "force", "combat"],
     "agilite": ["esquive", "saute", "cours", "fuis", "discrétion", "cache", "évite", "rapide"],
     "intelligence": ["analyse", "réfléchis", "comprends", "lis", "étudie", "observe", "cherche"],
@@ -91,6 +96,7 @@ class Personnage(db.Model):
     intelligence = db.Column(db.Integer, default=10)
     esprit = db.Column(db.Integer, default=10)
     chance = db.Column(db.Integer, default=10)
+    reiatsu = db.Column(db.Integer, default=10)
 
 
 class Message(db.Model):
@@ -113,6 +119,13 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
+    # Migration légère : ajoute la colonne reiatsu si la table personnage existait déjà
+    # (sans cette colonne) avant cette mise à jour.
+    try:
+        db.session.execute(db.text("ALTER TABLE personnage ADD COLUMN reiatsu INTEGER DEFAULT 10"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def generer_personnage(party_id, username, univers_cle):
@@ -136,7 +149,8 @@ def generer_personnage(party_id, username, univers_cle):
             agilite=int(data.get("agilite", 10)),
             intelligence=int(data.get("intelligence", 10)),
             esprit=int(data.get("esprit", 10)),
-            chance=int(data.get("chance", 10))
+            chance=int(data.get("chance", 10)),
+            reiatsu=int(data.get("reiatsu", 10))
         )
     except Exception:
         perso = Personnage(
@@ -148,7 +162,8 @@ def generer_personnage(party_id, username, univers_cle):
             agilite=random.randint(8, 15),
             intelligence=random.randint(8, 15),
             esprit=random.randint(8, 15),
-            chance=random.randint(8, 15)
+            chance=random.randint(8, 15),
+            reiatsu=random.randint(8, 15)
         )
 
     db.session.add(perso)
