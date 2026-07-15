@@ -285,7 +285,12 @@
             cible.scrollTop = cible.scrollHeight;
         }
 
+        let chargementEnCours = false;
+
         async function chargerMessages() {
+            if (chargementEnCours) return;
+            chargementEnCours = true;
+
             try {
                 const reponse = await fetch(`/partie/${codePartie}/messages?apres=${dernierId}`);
                 if (!reponse.ok) throw new Error("Erreur serveur");
@@ -297,6 +302,8 @@
                 afficherStatut("statut-connexion", "", false);
             } catch (err) {
                 afficherStatut("statut-connexion", "Connexion au serveur perdue, nouvelle tentative...", true);
+            } finally {
+                chargementEnCours = false;
             }
         }
 
