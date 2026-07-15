@@ -6,78 +6,64 @@
     <style>
         body { background: #111; color: #eee; font-family: Arial, sans-serif; padding: 20px; }
         #entete {
-            max-width: 700px;
-            margin: 0 auto 10px auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: #aaa;
-            font-size: 14px;
+            max-width: 1100px; margin: 0 auto 10px auto;
+            display: flex; justify-content: space-between; align-items: center;
+            color: #aaa; font-size: 14px;
         }
         #infos-partie {
-            max-width: 700px;
-            margin: 0 auto 15px auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-            color: #888;
+            max-width: 1100px; margin: 0 auto 15px auto;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px; color: #888;
         }
-        #code-partie {
-            background: #222;
-            padding: 4px 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 14px;
-            color: #6cf;
-        }
+        #code-partie { background: #222; padding: 4px 10px; border-radius: 5px; font-family: monospace; color: #6cf; }
         #btn-deconnexion, #btn-accueil {
-            color: #f66;
-            text-decoration: none;
-            border: 1px solid #f66;
-            padding: 4px 10px;
-            border-radius: 5px;
-            margin-left: 8px;
+            color: #f66; text-decoration: none; border: 1px solid #f66;
+            padding: 4px 10px; border-radius: 5px; margin-left: 8px;
         }
-        #btn-terminer {
-            background: #a33;
-            color: #eee;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 13px;
+        #btn-terminer { background: #a33; color: #eee; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+        #btn-relancer { background: #3a3; color: #eee; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+        #statut-connexion { display: none; }
+
+        #layout { max-width: 1100px; margin: auto; display: flex; gap: 15px; align-items: flex-start; }
+        #colonne-chat { flex: 1; min-width: 0; }
+        #colonne-perso {
+            width: 220px; background: #1a1a1a; border-radius: 10px; padding: 15px;
+            flex-shrink: 0; position: sticky; top: 20px;
         }
-        #btn-relancer {
-            background: #3a3;
-            color: #eee;
-            border: none;
-            padding: 5px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 13px;
+        #colonne-perso h3 { margin-top: 0; color: #6cf; font-size: 16px; }
+        .stat-ligne { display: flex; justify-content: space-between; margin: 6px 0; font-size: 13px; color: #ccc; }
+        .stat-valeur { color: #eee; font-weight: bold; }
+
+        #de-container { margin-top: 15px; text-align: center; }
+        #de-affiche {
+            width: 60px; height: 60px; margin: 10px auto; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: bold; background: #333; color: #eee;
+            transition: transform 0.3s;
         }
-        #statut-connexion {
-            display: none;
-        }
-        #chat { max-width: 700px; margin: auto; }
+        #de-affiche.critique-reussite { background: #2a5; color: #fff; }
+        #de-affiche.critique-echec { background: #a22; color: #fff; }
+        #de-resultat-texte { font-size: 13px; color: #aaa; }
+
+        #chat { }
         .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
         .joueur { background: #2a4d69; text-align: right; }
         .autre-joueur { background: #4a2a69; }
         .autre-joueur .nom-auteur { color: #c9a; font-size: 12px; display: block; margin-bottom: 4px; }
         .mj { background: #333; }
-        #zone-saisie { display: flex; max-width: 700px; margin: 20px auto; }
+        .jet-message {
+            background: #222; border: 1px dashed #555; text-align: center;
+            font-size: 13px; color: #ccc; padding: 8px;
+        }
+        .jet-message.mon-jet { border-color: #6cf; color: #6cf; }
+
+        #zone-saisie { display: flex; max-width: 1100px; margin: 20px auto; }
         #action { flex: 1; padding: 10px; font-size: 16px; }
         button.envoyer { padding: 10px 20px; font-size: 16px; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #bandeau-terminee {
-            max-width: 700px;
-            margin: 0 auto 15px auto;
-            background: #542;
-            color: #fc8;
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
+            max-width: 1100px; margin: 0 auto 15px auto; background: #542; color: #fc8;
+            padding: 10px; border-radius: 8px; text-align: center;
         }
     </style>
 </head>
@@ -105,11 +91,30 @@
     <div id="bandeau-terminee">Cette partie est terminée. {% if est_hote %}Tu peux la relancer avec le bouton ci-dessus.{% endif %}</div>
     {% endif %}
 
-    <div id="statut-connexion"></div>
-    <div id="chat"></div>
-    <div id="zone-saisie">
-        <input type="text" id="action" placeholder="Que fais-tu ?" {% if not active %}disabled{% endif %}>
-        <button class="envoyer" id="btn-envoyer" onclick="envoyer()" {% if not active %}disabled{% endif %}>Envoyer</button>
+    <div id="layout">
+        <div id="colonne-chat">
+            <div id="statut-connexion"></div>
+            <div id="chat"></div>
+            <div id="zone-saisie">
+                <input type="text" id="action" placeholder="Que fais-tu ?" {% if not active %}disabled{% endif %}>
+                <button class="envoyer" id="btn-envoyer" onclick="envoyer()" {% if not active %}disabled{% endif %}>Envoyer</button>
+            </div>
+        </div>
+
+        <div id="colonne-perso">
+            <h3>{{ perso.race }}</h3>
+            <div style="color:#999; font-size:13px; margin-bottom:10px;">{{ perso.classe }}</div>
+            <div class="stat-ligne"><span>Force</span><span class="stat-valeur">{{ perso.force }}</span></div>
+            <div class="stat-ligne"><span>Agilité</span><span class="stat-valeur">{{ perso.agilite }}</span></div>
+            <div class="stat-ligne"><span>Intelligence</span><span class="stat-valeur">{{ perso.intelligence }}</span></div>
+            <div class="stat-ligne"><span>Esprit</span><span class="stat-valeur">{{ perso.esprit }}</span></div>
+            <div class="stat-ligne"><span>Chance</span><span class="stat-valeur">{{ perso.chance }}</span></div>
+
+            <div id="de-container">
+                <div id="de-affiche">-</div>
+                <div id="de-resultat-texte">En attente d'une action</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -121,19 +126,31 @@
         function afficherStatut(texte, actif) {
             const statut = document.getElementById("statut-connexion");
             if (actif) {
-                statut.style.display = "block";
-                statut.style.background = "#542";
-                statut.style.color = "#fc8";
-                statut.style.padding = "8px";
-                statut.style.borderRadius = "6px";
-                statut.style.textAlign = "center";
-                statut.style.fontSize = "13px";
-                statut.style.maxWidth = "700px";
-                statut.style.margin = "0 auto 10px auto";
+                statut.style.cssText = "display:block;background:#542;color:#fc8;padding:8px;border-radius:6px;text-align:center;font-size:13px;margin-bottom:10px;";
                 statut.textContent = texte;
             } else {
                 statut.style.display = "none";
             }
+        }
+
+        function afficherDe(dj) {
+            const de = document.getElementById("de-affiche");
+            const texte = document.getElementById("de-resultat-texte");
+
+            de.className = "";
+            if (dj.resultat === "réussite critique") de.classList.add("critique-reussite");
+            if (dj.resultat === "échec critique") de.classList.add("critique-echec");
+
+            if (dj.jet !== undefined) {
+                de.textContent = dj.jet;
+                texte.textContent = `${dj.stat} : ${dj.jet} + ${dj.modificateur} = ${dj.total} → ${dj.resultat}`;
+            } else {
+                de.textContent = "?";
+                texte.textContent = `${dj.resultat}`;
+            }
+
+            de.style.transform = "scale(1.2)";
+            setTimeout(() => { de.style.transform = "scale(1)"; }, 300);
         }
 
         async function envoyer() {
@@ -176,7 +193,16 @@
             const chat = document.getElementById("chat");
             const div = document.createElement("div");
 
-            if (msg.role === "assistant") {
+            if (msg.type_special === "jet_de_de") {
+                const estMonJet = msg.donnees_jet && msg.donnees_jet.jet !== undefined;
+                div.className = "message jet-message" + (estMonJet ? " mon-jet" : "");
+                if (estMonJet) {
+                    afficherDe(msg.donnees_jet);
+                    div.textContent = `🎲 Ton jet — ${msg.donnees_jet.stat} : ${msg.donnees_jet.jet} + ${msg.donnees_jet.modificateur} = ${msg.donnees_jet.total} → ${msg.donnees_jet.resultat}`;
+                } else {
+                    div.textContent = `🎲 ${msg.donnees_jet.auteur} : ${msg.donnees_jet.resultat}`;
+                }
+            } else if (msg.role === "assistant") {
                 div.className = "message mj";
                 div.textContent = msg.contenu;
             } else if (msg.auteur === monPseudo) {
