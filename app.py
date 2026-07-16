@@ -7,6 +7,7 @@ import os
 import random
 import string
 import json
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +27,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = "connexion"
 
 ZONE_DEFAUT = "Ensemble"
+BALISE_MONTEE = "[MONTEE_DE_NIVEAU]"
 
 
 def generer_code():
@@ -43,29 +45,43 @@ Décris les scènes de façon immersive, en 3-5 phrases maximum par réponse, en
 Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-les décider de leurs actions.
 IMPORTANT: Pour chaque action d'un joueur, un résultat de jet de dé te sera donné (réussite critique, réussite, échec, ou échec critique). Tu DOIS respecter ce résultat dans ta narration : ne fais jamais réussir une action si le résultat indique un échec, et inversement.
 Les personnages possèdent aussi un Reiatsu (pression/énergie spirituelle) qui reflète leur puissance spirituelle brute : utilise-le dans ta narration lors de libérations de pouvoir, de Kido, de Shikai/Bankai ou de manifestations de pression spirituelle.
-IMPORTANT SUR LE PRIVÉ: certains messages sont marqués [ACTION PRIVÉE de X]. Ce sont des actions solitaires ou secrètes (fouiller seul, parler discrètement à un PNJ, etc.). Ta réponse à une action privée ne doit être connue QUE du joueur concerné : ne révèle JAMAIS dans le chat public une information qu'un joueur a obtenue uniquement en privé, sauf si ce joueur la partage lui-même publiquement dans un message ultérieur.""",
-        "archetypes": [
-            {"race": "Humain", "classe": "Étudiant ordinaire", "stats": (5, 10), "reiatsu": (3, 7)},
-            {"race": "Shinigami", "classe": "Recrue de l'Académie", "stats": (6, 11), "reiatsu": (6, 11)},
-            {"race": "Quincy", "classe": "Quincy autodidacte", "stats": (6, 11), "reiatsu": (6, 11)},
-            {"race": "Fullbringer", "classe": "Fullbringer novice", "stats": (6, 11), "reiatsu": (5, 10)},
-
-            {"race": "Shinigami", "classe": "Simple officier de division", "stats": (9, 14), "reiatsu": (9, 14)},
-            {"race": "Hollow", "classe": "Hollow ordinaire", "stats": (9, 14), "reiatsu": (9, 15)},
-            {"race": "Arrancar", "classe": "Fraccion", "stats": (10, 14), "reiatsu": (10, 15)},
-            {"race": "Quincy", "classe": "Archer Quincy traditionnel", "stats": (9, 14), "reiatsu": (9, 14)},
-
-            {"race": "Shinigami", "classe": "Lieutenant de division", "stats": (12, 16), "reiatsu": (13, 17)},
-            {"race": "Hollow", "classe": "Adjuchas", "stats": (12, 16), "reiatsu": (13, 17)},
-            {"race": "Arrancar", "classe": "Numeros", "stats": (12, 16), "reiatsu": (13, 17)},
-            {"race": "Vizard", "classe": "Vizard en formation", "stats": (12, 16), "reiatsu": (12, 16)},
-
-            {"race": "Shinigami", "classe": "Capitaine de division", "stats": (15, 18), "reiatsu": (16, 18)},
-            {"race": "Hollow", "classe": "Vasto Lorde", "stats": (15, 18), "reiatsu": (16, 18)},
-            {"race": "Arrancar", "classe": "Espada", "stats": (15, 18), "reiatsu": (16, 18)},
-            {"race": "Quincy", "classe": "Sternritter", "stats": (15, 18), "reiatsu": (15, 18)},
-            {"race": "Vizard", "classe": "Ancien capitaine devenu Vizard", "stats": (15, 18), "reiatsu": (16, 18)},
-        ]
+IMPORTANT SUR LE PRIVÉ: certains messages sont marqués [ACTION PRIVÉE de X]. Ce sont des actions solitaires ou secrètes. Ta réponse à une action privée ne doit être connue QUE du joueur concerné : ne révèle JAMAIS dans le chat public une information qu'un joueur a obtenue uniquement en privé, sauf si ce joueur la partage lui-même publiquement.
+IMPORTANT SUR LA PROGRESSION: si, et seulement si, l'action du joueur qui vient d'agir représente un accomplissement réellement marquant et rare (victoire décisive contre un adversaire nettement supérieur, moment charnière de développement du personnage, réussite critique dans un instant crucial), termine ta réponse par la balise exacte [MONTEE_DE_NIVEAU] sur sa propre ligne. N'utilise cette balise que très rarement, seulement pour un vrai tournant.
+IMPORTANT SUR LES POINTS DE VIE: si l'action du joueur implique qu'il encaisse un coup, une blessure, ou tout dommage physique/spirituel cohérent avec le résultat du jet (surtout en cas d'échec ou échec critique lors d'un combat), ajoute la balise [DEGATS:X] où X est un nombre entre 1 et 25 reflétant la gravité (léger pour un échec simple, sévère pour un échec critique face à un adversaire puissant). Si le joueur se soigne, reçoit des soins d'un allié/Kido de soin, ou se repose, ajoute plutôt [SOIN:X] avec X entre 1 et 20. N'ajoute JAMAIS ces balises pour une action anodine sans enjeu physique. Tu peux combiner plusieurs balises si pertinent.""",
+        "races": {
+            "Humain": [
+                {"classe": "Étudiant ordinaire", "stats": (5, 10), "reiatsu": (3, 7)},
+            ],
+            "Shinigami": [
+                {"classe": "Recrue de l'Académie", "stats": (6, 11), "reiatsu": (6, 11)},
+                {"classe": "Simple officier de division", "stats": (9, 14), "reiatsu": (9, 14)},
+                {"classe": "Lieutenant de division", "stats": (12, 16), "reiatsu": (13, 17)},
+                {"classe": "Capitaine de division", "stats": (15, 18), "reiatsu": (16, 18)},
+            ],
+            "Hollow": [
+                {"classe": "Hollow ordinaire", "stats": (9, 14), "reiatsu": (9, 15)},
+                {"classe": "Adjuchas", "stats": (12, 16), "reiatsu": (13, 17)},
+                {"classe": "Vasto Lorde", "stats": (15, 18), "reiatsu": (16, 18)},
+            ],
+            "Arrancar": [
+                {"classe": "Fraccion", "stats": (10, 14), "reiatsu": (10, 15)},
+                {"classe": "Numeros", "stats": (12, 16), "reiatsu": (13, 17)},
+                {"classe": "Espada", "stats": (15, 18), "reiatsu": (16, 18)},
+            ],
+            "Quincy": [
+                {"classe": "Quincy autodidacte", "stats": (6, 11), "reiatsu": (6, 11)},
+                {"classe": "Archer Quincy traditionnel", "stats": (9, 14), "reiatsu": (9, 14)},
+                {"classe": "Sternritter", "stats": (15, 18), "reiatsu": (15, 18)},
+            ],
+            "Fullbringer": [
+                {"classe": "Fullbringer novice", "stats": (6, 11), "reiatsu": (5, 10)},
+                {"classe": "Ancien Xcution", "stats": (10, 14), "reiatsu": (10, 15)},
+            ],
+            "Vizard": [
+                {"classe": "Vizard en formation", "stats": (12, 16), "reiatsu": (12, 16)},
+                {"classe": "Ancien capitaine devenu Vizard", "stats": (15, 18), "reiatsu": (16, 18)},
+            ],
+        }
     }
 }
 
@@ -87,6 +103,19 @@ def deviner_stat(action_texte):
             if mot in texte:
                 return stat
     return "chance"
+
+
+def liste_plate_archetypes(univers_cle):
+    infos = UNIVERS.get(univers_cle, UNIVERS["bleach"])
+    plate = []
+    for race, paliers in infos["races"].items():
+        for palier in paliers:
+            plate.append({"race": race, **palier})
+    return plate
+
+
+def calculer_pv_max(stat_min, stat_max):
+    return round(((stat_min + stat_max) / 2) * 3)
 
 
 class User(UserMixin, db.Model):
@@ -116,6 +145,8 @@ class Personnage(db.Model):
     chance = db.Column(db.Integer, default=10)
     reiatsu = db.Column(db.Integer, default=10)
     zone = db.Column(db.String(80), default=ZONE_DEFAUT)
+    pv_max = db.Column(db.Integer, default=20)
+    pv_actuels = db.Column(db.Integer, default=20)
 
 
 class Message(db.Model):
@@ -141,6 +172,8 @@ with app.app_context():
     for ddl in [
         "ALTER TABLE personnage ADD COLUMN reiatsu INTEGER DEFAULT 10",
         f"ALTER TABLE personnage ADD COLUMN zone VARCHAR(80) DEFAULT '{ZONE_DEFAUT}'",
+        "ALTER TABLE personnage ADD COLUMN pv_max INTEGER DEFAULT 20",
+        "ALTER TABLE personnage ADD COLUMN pv_actuels INTEGER DEFAULT 20",
     ]:
         try:
             db.session.execute(db.text(ddl))
@@ -154,11 +187,11 @@ def modificateur_de(valeur):
 
 
 def generer_personnage(party_id, username, univers_cle):
-    infos_univers = UNIVERS.get(univers_cle, UNIVERS["bleach"])
-    archetype = random.choice(infos_univers["archetypes"])
+    archetype = random.choice(liste_plate_archetypes(univers_cle))
 
     stat_min, stat_max = archetype["stats"]
     reiatsu_min, reiatsu_max = archetype["reiatsu"]
+    pv_max = calculer_pv_max(stat_min, stat_max)
 
     perso = Personnage(
         party_id=party_id,
@@ -171,12 +204,69 @@ def generer_personnage(party_id, username, univers_cle):
         esprit=random.randint(stat_min, stat_max),
         chance=random.randint(stat_min, stat_max),
         reiatsu=random.randint(reiatsu_min, reiatsu_max),
-        zone=ZONE_DEFAUT
+        zone=ZONE_DEFAUT,
+        pv_max=pv_max,
+        pv_actuels=pv_max
     )
 
     db.session.add(perso)
     db.session.commit()
     return perso
+
+
+def evoluer_personnage(perso, univers_cle):
+    races = UNIVERS.get(univers_cle, UNIVERS["bleach"])["races"]
+
+    if perso.race == "Humain":
+        autres_races = [r for r in races.keys() if r != "Humain"]
+        nouvelle_race = random.choice(autres_races)
+        premier_palier = races[nouvelle_race][0]
+
+        ancienne_race, ancienne_classe = perso.race, perso.classe
+        perso.race = nouvelle_race
+        perso.classe = premier_palier["classe"]
+
+        stat_min, stat_max = premier_palier["stats"]
+        reiatsu_min, reiatsu_max = premier_palier["reiatsu"]
+        for stat_nom in ["force", "agilite", "intelligence", "esprit", "chance"]:
+            valeur_actuelle = getattr(perso, stat_nom)
+            perso.__setattr__(stat_nom, max(valeur_actuelle, random.randint(stat_min, stat_max)))
+        perso.reiatsu = max(perso.reiatsu, random.randint(reiatsu_min, reiatsu_max))
+
+        nouveau_pv_max = calculer_pv_max(stat_min, stat_max)
+        if nouveau_pv_max > perso.pv_max:
+            diff = nouveau_pv_max - perso.pv_max
+            perso.pv_max = nouveau_pv_max
+            perso.pv_actuels = min(perso.pv_max, perso.pv_actuels + diff)
+
+        db.session.commit()
+        return f"{ancienne_race} ({ancienne_classe}) → {nouvelle_race} ({perso.classe})"
+
+    palier_liste = races.get(perso.race, [])
+    index_actuel = next((i for i, pl in enumerate(palier_liste) if pl["classe"] == perso.classe), None)
+
+    if index_actuel is None or index_actuel + 1 >= len(palier_liste):
+        return None
+
+    nouveau_palier = palier_liste[index_actuel + 1]
+    ancienne_classe = perso.classe
+    perso.classe = nouveau_palier["classe"]
+
+    stat_min, stat_max = nouveau_palier["stats"]
+    reiatsu_min, reiatsu_max = nouveau_palier["reiatsu"]
+    for stat_nom in ["force", "agilite", "intelligence", "esprit", "chance"]:
+        valeur_actuelle = getattr(perso, stat_nom)
+        perso.__setattr__(stat_nom, max(valeur_actuelle, random.randint(stat_min, stat_max)))
+    perso.reiatsu = max(perso.reiatsu, random.randint(reiatsu_min, reiatsu_max))
+
+    nouveau_pv_max = calculer_pv_max(stat_min, stat_max)
+    if nouveau_pv_max > perso.pv_max:
+        diff = nouveau_pv_max - perso.pv_max
+        perso.pv_max = nouveau_pv_max
+        perso.pv_actuels = min(perso.pv_max, perso.pv_actuels + diff)
+
+    db.session.commit()
+    return f"{ancienne_classe} → {perso.classe}"
 
 
 @app.route("/inscription", methods=["GET", "POST"])
@@ -343,6 +433,23 @@ def changer_zone(code):
         db.session.commit()
 
     return jsonify({"ok": True, "zone": perso.zone})
+
+
+@app.route("/partie/<code>/personnage")
+@login_required
+def infos_personnage(code):
+    p = Party.query.filter_by(code=code).first()
+    if not p:
+        abort(404)
+    perso = Personnage.query.filter_by(party_id=p.id, username=current_user.username).first()
+    if not perso:
+        abort(404)
+    return jsonify({
+        "race": perso.race, "classe": perso.classe,
+        "force": perso.force, "agilite": perso.agilite, "intelligence": perso.intelligence,
+        "esprit": perso.esprit, "chance": perso.chance, "reiatsu": perso.reiatsu, "zone": perso.zone,
+        "pv_max": perso.pv_max, "pv_actuels": perso.pv_actuels
+    })
 
 
 @app.route("/partie/<code>/messages")
@@ -514,16 +621,59 @@ def jouer(code):
     )
     texte_reponse = reponse.choices[0].message.content
 
+    montee_de_niveau = BALISE_MONTEE in texte_reponse
+    degats_match = re.search(r"\[DEGATS:(\d+)\]", texte_reponse, re.IGNORECASE)
+    soin_match = re.search(r"\[SOIN:(\d+)\]", texte_reponse, re.IGNORECASE)
+
+    texte_reponse_propre = texte_reponse
+    for balise in [BALISE_MONTEE, degats_match.group(0) if degats_match else "", soin_match.group(0) if soin_match else ""]:
+        if balise:
+            texte_reponse_propre = texte_reponse_propre.replace(balise, "")
+    texte_reponse_propre = texte_reponse_propre.strip()
+
     msg_ia = Message(
         party_id=p.id,
         auteur="MJ",
-        contenu=texte_reponse,
+        contenu=texte_reponse_propre,
         role="assistant",
         visibilite=visibilite,
         destinataire=destinataire
     )
     db.session.add(msg_ia)
     db.session.commit()
+
+    if perso:
+        if degats_match:
+            valeur = max(1, min(25, int(degats_match.group(1))))
+            perso.pv_actuels = max(0, perso.pv_actuels - valeur)
+            texte_pv = f"💥 {current_user.username} perd {valeur} PV ({perso.pv_actuels}/{perso.pv_max})"
+            if perso.pv_actuels == 0:
+                texte_pv += " — K.O. !"
+            db.session.add(Message(
+                party_id=p.id, auteur="Système", contenu=texte_pv,
+                role="assistant", visibilite="public", type_special="pv_change"
+            ))
+            db.session.commit()
+
+        if soin_match:
+            valeur = max(1, min(20, int(soin_match.group(1))))
+            perso.pv_actuels = min(perso.pv_max, perso.pv_actuels + valeur)
+            texte_pv = f"❤️‍🩹 {current_user.username} récupère {valeur} PV ({perso.pv_actuels}/{perso.pv_max})"
+            db.session.add(Message(
+                party_id=p.id, auteur="Système", contenu=texte_pv,
+                role="assistant", visibilite="public", type_special="pv_change"
+            ))
+            db.session.commit()
+
+        if montee_de_niveau:
+            description_evolution = evoluer_personnage(perso, p.univers)
+            if description_evolution:
+                db.session.add(Message(
+                    party_id=p.id, auteur="Système",
+                    contenu=f"⬆️ {current_user.username} évolue : {description_evolution} !",
+                    role="assistant", visibilite="public", type_special="evolution"
+                ))
+                db.session.commit()
 
     return jsonify({"ok": True})
 

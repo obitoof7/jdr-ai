@@ -50,6 +50,13 @@
         .zone-ligne { border-top: 1px solid #333; padding-top: 8px; margin-top: 10px; font-size: 12px; color: #999; }
         .zone-valeur { color: #8cf; font-weight: bold; }
 
+        #pv-container { margin-top: 12px; }
+        #pv-texte { font-size: 12px; color: #ccc; margin-bottom: 4px; display: flex; justify-content: space-between; }
+        #pv-fond { width: 100%; height: 14px; background: #333; border-radius: 7px; overflow: hidden; }
+        #pv-barre { height: 100%; background: linear-gradient(90deg, #4a4, #6d6); transition: width 0.4s, background 0.4s; }
+        #pv-barre.pv-bas { background: linear-gradient(90deg, #a33, #d55); }
+        #pv-barre.pv-critique { background: linear-gradient(90deg, #700, #a00); }
+
         #de-container { margin-top: 15px; text-align: center; }
         #de-affiche {
             width: 60px; height: 60px; margin: 10px auto; border-radius: 10px;
@@ -136,14 +143,25 @@
         </div>
 
         <div id="colonne-perso">
-            <h3>{{ perso.race }}</h3>
-            <div style="color:#999; font-size:13px; margin-bottom:10px;">{{ perso.classe }}</div>
-            <div class="stat-ligne"><span>Force</span><span class="stat-valeur">{{ perso.force }}</span></div>
-            <div class="stat-ligne"><span>Agilité</span><span class="stat-valeur">{{ perso.agilite }}</span></div>
-            <div class="stat-ligne"><span>Intelligence</span><span class="stat-valeur">{{ perso.intelligence }}</span></div>
-            <div class="stat-ligne"><span>Esprit</span><span class="stat-valeur">{{ perso.esprit }}</span></div>
-            <div class="stat-ligne"><span>Chance</span><span class="stat-valeur">{{ perso.chance }}</span></div>
-            <div class="stat-ligne reiatsu-ligne"><span>Reiatsu</span><span class="stat-valeur">{{ perso.reiatsu }}</span></div>
+            <h3 id="perso-race">{{ perso.race }}</h3>
+            <div id="perso-classe" style="color:#999; font-size:13px; margin-bottom:10px;">{{ perso.classe }}</div>
+
+            <div id="pv-container">
+                <div id="pv-texte">
+                    <span>PV</span>
+                    <span id="pv-chiffres">{{ perso.pv_actuels }} / {{ perso.pv_max }}</span>
+                </div>
+                <div id="pv-fond">
+                    <div id="pv-barre" style="width: {{ (perso.pv_actuels / perso.pv_max * 100) if perso.pv_max else 100 }}%;"></div>
+                </div>
+            </div>
+
+            <div class="stat-ligne" style="margin-top:12px;"><span>Force</span><span class="stat-valeur" id="stat-force">{{ perso.force }}</span></div>
+            <div class="stat-ligne"><span>Agilité</span><span class="stat-valeur" id="stat-agilite">{{ perso.agilite }}</span></div>
+            <div class="stat-ligne"><span>Intelligence</span><span class="stat-valeur" id="stat-intelligence">{{ perso.intelligence }}</span></div>
+            <div class="stat-ligne"><span>Esprit</span><span class="stat-valeur" id="stat-esprit">{{ perso.esprit }}</span></div>
+            <div class="stat-ligne"><span>Chance</span><span class="stat-valeur" id="stat-chance">{{ perso.chance }}</span></div>
+            <div class="stat-ligne reiatsu-ligne"><span>Reiatsu</span><span class="stat-valeur" id="stat-reiatsu">{{ perso.reiatsu }}</span></div>
             <div class="zone-ligne">Zone actuelle : <span class="zone-valeur" id="zone-actuelle">{{ perso.zone }}</span></div>
 
             <div id="de-container">
@@ -189,6 +207,34 @@
 
             de.style.transform = "scale(1.2)";
             setTimeout(() => { de.style.transform = "scale(1)"; }, 300);
+        }
+
+        async function actualiserPersonnage() {
+            try {
+                const reponse = await fetch(`/partie/${codePartie}/personnage`);
+                if (!reponse.ok) return;
+                const d = await reponse.json();
+
+                document.getElementById("perso-race").textContent = d.race;
+                document.getElementById("perso-classe").textContent = d.classe;
+                document.getElementById("stat-force").textContent = d.force;
+                document.getElementById("stat-agilite").textContent = d.agilite;
+                document.getElementById("stat-intelligence").textContent = d.intelligence;
+                document.getElementById("stat-esprit").textContent = d.esprit;
+                document.getElementById("stat-chance").textContent = d.chance;
+                document.getElementById("stat-reiatsu").textContent = d.reiatsu;
+                document.getElementById("zone-actuelle").textContent = d.zone;
+
+                document.getElementById("pv-chiffres").textContent = `${d.pv_actuels} / ${d.pv_max}`;
+                const barre = document.getElementById("pv-barre");
+                const pourcentage = d.pv_max > 0 ? (d.pv_actuels / d.pv_max * 100) : 100;
+                barre.style.width = pourcentage + "%";
+                barre.className = "";
+                if (pourcentage <= 25) barre.classList.add("pv-critique");
+                else if (pourcentage <= 50) barre.classList.add("pv-bas");
+            } catch (err) {
+                // silencieux, on réessaiera au prochain cycle
+            }
         }
 
         async function envoyerAction(texte, prive) {
@@ -254,6 +300,7 @@
                 input.focus();
                 envoiEnCours = false;
                 chargerMessages();
+                actualiserPersonnage();
             }
         }
 
@@ -298,6 +345,7 @@
                 input.focus();
                 envoiPriveEnCours = false;
                 chargerMessages();
+                actualiserPersonnage();
             }
         }
 
@@ -305,7 +353,18 @@
             const cible = msg.canal === "prive" ? document.getElementById("chat-prive") : document.getElementById("chat");
             const div = document.createElement("div");
 
-            if (msg.type_special === "jet_de_de") {
+            if (msg.type_special === "evolution") {
+                div.className = "message mj";
+                div.style.background = "#2a5";
+                div.style.fontWeight = "bold";
+                div.style.textAlign = "center";
+                div.textContent = msg.contenu;
+            } else if (msg.type_special === "pv_change") {
+                div.className = "message mj";
+                div.style.borderLeft = "3px solid #a55";
+                div.style.textAlign = "center";
+                div.textContent = msg.contenu;
+            } else if (msg.type_special === "jet_de_de") {
                 const estMonJet = msg.donnees_jet && msg.donnees_jet.jet !== undefined;
                 div.className = "message jet-message" + (msg.canal === "prive" ? " jet-prive" : (estMonJet ? " mon-jet" : ""));
                 if (estMonJet) {
@@ -383,7 +442,9 @@
         });
 
         chargerMessages();
+        actualiserPersonnage();
         setInterval(chargerMessages, 3000);
+        setInterval(actualiserPersonnage, 4000);
     </script>
 </body>
 </html>
