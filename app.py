@@ -7,7 +7,6 @@ import os
 import random
 import string
 import json
-import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,12 +44,28 @@ Ne joue jamais à la place des joueurs : décris ce qui les entoure et laisse-le
 IMPORTANT: Pour chaque action d'un joueur, un résultat de jet de dé te sera donné (réussite critique, réussite, échec, ou échec critique). Tu DOIS respecter ce résultat dans ta narration : ne fais jamais réussir une action si le résultat indique un échec, et inversement.
 Les personnages possèdent aussi un Reiatsu (pression/énergie spirituelle) qui reflète leur puissance spirituelle brute : utilise-le dans ta narration lors de libérations de pouvoir, de Kido, de Shikai/Bankai ou de manifestations de pression spirituelle.
 IMPORTANT SUR LE PRIVÉ: certains messages sont marqués [ACTION PRIVÉE de X]. Ce sont des actions solitaires ou secrètes (fouiller seul, parler discrètement à un PNJ, etc.). Ta réponse à une action privée ne doit être connue QUE du joueur concerné : ne révèle JAMAIS dans le chat public une information qu'un joueur a obtenue uniquement en privé, sauf si ce joueur la partage lui-même publiquement dans un message ultérieur.""",
-        "prompt_generation": """Génère un personnage aléatoire pour un jeu de rôle dans l'univers de Bleach.
-Réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après, format exact :
-{"race": "...", "classe": "...", "force": X, "agilite": X, "intelligence": X, "esprit": X, "chance": X, "reiatsu": X}
-La race doit être cohérente avec Bleach (humain, Shinigami, Hollow, Quincy, etc.). La classe est son rôle/spécialité.
-Le Reiatsu représente la puissance spirituelle brute du personnage (utile pour le Kido, le Shikai/Bankai, la pression spirituelle).
-Chaque statistique (force, agilite, intelligence, esprit, chance, reiatsu) doit être un nombre entier entre 5 et 18."""
+        "archetypes": [
+            {"race": "Humain", "classe": "Étudiant ordinaire", "stats": (5, 10), "reiatsu": (3, 7)},
+            {"race": "Shinigami", "classe": "Recrue de l'Académie", "stats": (6, 11), "reiatsu": (6, 11)},
+            {"race": "Quincy", "classe": "Quincy autodidacte", "stats": (6, 11), "reiatsu": (6, 11)},
+            {"race": "Fullbringer", "classe": "Fullbringer novice", "stats": (6, 11), "reiatsu": (5, 10)},
+
+            {"race": "Shinigami", "classe": "Simple officier de division", "stats": (9, 14), "reiatsu": (9, 14)},
+            {"race": "Hollow", "classe": "Hollow ordinaire", "stats": (9, 14), "reiatsu": (9, 15)},
+            {"race": "Arrancar", "classe": "Fraccion", "stats": (10, 14), "reiatsu": (10, 15)},
+            {"race": "Quincy", "classe": "Archer Quincy traditionnel", "stats": (9, 14), "reiatsu": (9, 14)},
+
+            {"race": "Shinigami", "classe": "Lieutenant de division", "stats": (12, 16), "reiatsu": (13, 17)},
+            {"race": "Hollow", "classe": "Adjuchas", "stats": (12, 16), "reiatsu": (13, 17)},
+            {"race": "Arrancar", "classe": "Numeros", "stats": (12, 16), "reiatsu": (13, 17)},
+            {"race": "Vizard", "classe": "Vizard en formation", "stats": (12, 16), "reiatsu": (12, 16)},
+
+            {"race": "Shinigami", "classe": "Capitaine de division", "stats": (15, 18), "reiatsu": (16, 18)},
+            {"race": "Hollow", "classe": "Vasto Lorde", "stats": (15, 18), "reiatsu": (16, 18)},
+            {"race": "Arrancar", "classe": "Espada", "stats": (15, 18), "reiatsu": (16, 18)},
+            {"race": "Quincy", "classe": "Sternritter", "stats": (15, 18), "reiatsu": (15, 18)},
+            {"race": "Vizard", "classe": "Ancien capitaine devenu Vizard", "stats": (15, 18), "reiatsu": (16, 18)},
+        ]
     }
 }
 
@@ -140,43 +155,24 @@ def modificateur_de(valeur):
 
 def generer_personnage(party_id, username, univers_cle):
     infos_univers = UNIVERS.get(univers_cle, UNIVERS["bleach"])
+    archetype = random.choice(infos_univers["archetypes"])
 
-    try:
-        reponse = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": infos_univers["prompt_generation"]}]
-        )
-        texte = reponse.choices[0].message.content
-        match = re.search(r'\{.*\}', texte, re.DOTALL)
-        data = json.loads(match.group(0))
+    stat_min, stat_max = archetype["stats"]
+    reiatsu_min, reiatsu_max = archetype["reiatsu"]
 
-        perso = Personnage(
-            party_id=party_id,
-            username=username,
-            race=data.get("race", "Inconnu"),
-            classe=data.get("classe", "Aventurier"),
-            force=int(data.get("force", 10)),
-            agilite=int(data.get("agilite", 10)),
-            intelligence=int(data.get("intelligence", 10)),
-            esprit=int(data.get("esprit", 10)),
-            chance=int(data.get("chance", 10)),
-            reiatsu=int(data.get("reiatsu", 10)),
-            zone=ZONE_DEFAUT
-        )
-    except Exception:
-        perso = Personnage(
-            party_id=party_id,
-            username=username,
-            race="Humain",
-            classe="Aventurier",
-            force=random.randint(8, 15),
-            agilite=random.randint(8, 15),
-            intelligence=random.randint(8, 15),
-            esprit=random.randint(8, 15),
-            chance=random.randint(8, 15),
-            reiatsu=random.randint(8, 15),
-            zone=ZONE_DEFAUT
-        )
+    perso = Personnage(
+        party_id=party_id,
+        username=username,
+        race=archetype["race"],
+        classe=archetype["classe"],
+        force=random.randint(stat_min, stat_max),
+        agilite=random.randint(stat_min, stat_max),
+        intelligence=random.randint(stat_min, stat_max),
+        esprit=random.randint(stat_min, stat_max),
+        chance=random.randint(stat_min, stat_max),
+        reiatsu=random.randint(reiatsu_min, reiatsu_max),
+        zone=ZONE_DEFAUT
+    )
 
     db.session.add(perso)
     db.session.commit()
@@ -385,8 +381,6 @@ def messages(code):
 
 
 def tenter_perceptions(p, acteur_username, acteur_perso, action_texte):
-    """Pour une action privée, vérifie si d'autres joueurs présents dans la même zone
-    perçoivent (partiellement) que quelque chose se passe, selon leur Esprit vs la discrétion de l'acteur."""
     if not acteur_perso:
         return
 
